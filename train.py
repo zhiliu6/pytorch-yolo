@@ -54,6 +54,12 @@ if hyp['fl_gamma']:
     print('Using FocalLoss(gamma=%g)' % hyp['fl_gamma'])
 
 
+def save_to(chkpt, name):
+    extra_save_path = opt.extra_save_path
+    torch.save(chkpt, name)
+    if os.path.exists(extra_save_path):
+        torch.save(chkpt, extra_save_path + name)
+
 def train():
     cfg = opt.cfg
     data = opt.data
@@ -343,9 +349,9 @@ def train():
                          'optimizer': None if final_epoch else optimizer.state_dict()}
 
             # Save last, best and delete
-            torch.save(chkpt, last)
+            save_to(chkpt, last)
             if (best_fitness == fi) and not final_epoch:
-                torch.save(chkpt, best)
+                save_to(chkpt, best)
             del chkpt
 
         # end epoch ----------------------------------------------------------------------------------------------------
@@ -390,9 +396,10 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='', help='device id (i.e. 0 or 0,1 or cpu)')
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
+    parser.add_argument('--extra_save_path', type=str, default='', help='extra checkpoint save path')
     opt = parser.parse_args()
     opt.weights = last if opt.resume else opt.weights
-    check_git_status()
+    # check_git_status()
     print(opt)
     opt.img_size.extend([opt.img_size[-1]] * (3 - len(opt.img_size)))  # extend to 3 sizes (min, max, test)
     device = torch_utils.select_device(opt.device, apex=mixed_precision, batch_size=opt.batch_size)
