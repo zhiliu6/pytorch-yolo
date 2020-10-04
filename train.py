@@ -179,7 +179,7 @@ def train():
 
     # Dataset
     dataset = LoadImagesAndLabels(train_path, img_size, batch_size,
-                                  augment=True,
+                                  augment=opt.mosaic,
                                   hyp=hyp,  # augmentation hyperparameters
                                   rect=opt.rect,  # rectangular training
                                   cache_images=opt.cache_images,
@@ -397,6 +397,7 @@ if __name__ == '__main__':
     parser.add_argument('--adam', action='store_true', help='use adam optimizer')
     parser.add_argument('--single-cls', action='store_true', help='train as single-class dataset')
     parser.add_argument('--extra_save_path', type=str, default='', help='extra checkpoint save path')
+    parser.add_argument('--mosaic', action='store_true', help='enable mosaic training')
     opt = parser.parse_args()
     opt.weights = last if opt.resume else opt.weights
     # check_git_status()
