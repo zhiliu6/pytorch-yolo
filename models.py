@@ -98,9 +98,9 @@ def create_modules(module_defs, img_size, cfg):
 
         elif mdef['type'] == 'yolo':
             yolo_index += 1
-            stride = [8, 16, 32]  # P5, P4, P3 strides
+            stride = [8, 16, 32, 64, 128]  # P5, P4, P3 strides
             if any(x in cfg for x in ['yolov4-tiny']):  # stride order reversed
-                stride = [32, 16, 8]
+                stride = [128, 64, 32, 16, 8]
             layers = mdef['from'] if 'from' in mdef else []
             modules = YOLOLayer(anchors=mdef['anchors'][mdef['mask']],  # anchor list
                                 nc=mdef['classes'],  # number of classes
@@ -350,8 +350,16 @@ def load_darknet_weights(self, weights, cutoff=-1):
     file = Path(weights).name
     if file == 'darknet53.conv.74':
         cutoff = 75
+    elif file == 'yolov3-tiny.conv.13':
+        cutoff = 13
+    elif file == 'yolov3-tiny.conv.14':
+        cutoff = 14
     elif file == 'yolov3-tiny.conv.15':
         cutoff = 15
+    elif file == 'yolov3.conv.81':
+        cutoff = 81
+    elif file == 'yolov3-spp.conv.85':
+        cutoff = 85
     elif file == 'yolov4.conv.137':
         cutoff = 137
     elif file == 'yolov4-tiny.conv.29':
