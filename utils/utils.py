@@ -734,6 +734,8 @@ def kmean_anchors(path='../coco/train2017.txt', n=12, img_size=(320, 1024), thr=
     use_darknet = False
     if use_darknet and n == 9:
         k = np.array([[10, 13], [16, 30], [33, 23], [30, 61], [62, 45], [59, 119], [116, 90], [156, 198], [373, 326]])
+    elif use_darknet and n == 15:
+        k = np.array([[4, 4],  [5, 5],  [6, 6], [7, 7],  [8, 8],  [9, 9], [10, 13], [16, 30], [33, 23], [30, 61], [62, 45], [59, 119], [116, 90], [156, 198], [373, 326]])
     else:
         # Kmeans calculation
         from scipy.cluster.vq import kmeans
