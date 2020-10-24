@@ -112,6 +112,9 @@ def create_modules(module_defs, img_size, cfg):
             # Initialize preceding Conv2d() bias (https://arxiv.org/pdf/1708.02002.pdf section 3.3)
             try:
                 j = layers[yolo_index] if 'from' in mdef else -1
+                # If previous layer is a dropout layer, get the one before
+                if module_list[j].__class__.__name__ == 'Dropout':
+                    j -= 1
                 bias_ = module_list[j][0].bias  # shape(255,)
                 bias = bias_[:modules.no * modules.na].view(modules.na, -1)  # shape(3,85)
                 bias[:, 4] += -4.5  # obj
@@ -120,6 +123,9 @@ def create_modules(module_defs, img_size, cfg):
             except:
                 print('WARNING: smart bias initialization failure.')
 
+        elif mdef['type'] == 'dropout':
+            perc = float(mdef['probability'])
+            modules = nn.Dropout(p=perc)
         else:
             print('Warning: Unrecognized Layer Type: ' + mdef['type'])
 
@@ -466,7 +472,15 @@ def attempt_download(weights):
     msg = weights + ' missing, try downloading from https://drive.google.com/open?id=1LezFG5g3BCW6iYaV89B2i64cqEUZD7e0'
 
     if len(weights) > 0 and not os.path.isfile(weights):
-        d = {'': ''}
+        d = {'yolov3-spp.weights': '16lYS4bcIdM2HdmyJBVDOvt3Trx6N3W2R',
+             'yolov3.weights': '1uTlyDWlnaqXcsKOktP5aH_zRDbfcDp-y',
+             'yolov3-tiny.weights': '1CCF-iNIIkYesIDzaPvdwlcf7H9zSsKZQ',
+             'yolov3-spp.pt': '1f6Ovy3BSq2wYq4UfvFUpxJFNDFfrIDcR',
+             'yolov3.pt': '1SHNFyoe5Ni8DajDNEqgB2oVKBb_NoEad',
+             'yolov3-tiny.pt': '10m_3MlpQwRtZetQxtksm9jqHrPTHZ6vo',
+             'darknet53.conv.74': '1WUVBid-XuoUBmvzBVUCBl_ELrzqwA8dJ',
+             'yolov3-tiny.conv.15': '1Bw0kCpplxUqyRYAJr9RY9SGnOJbo9nEj',
+             'yolov3-spp-ultralytics.pt': '1UcR-zVoMs7DH5dj3N1bswkiQTA4dmKF4'}
 
         file = Path(weights).name
         if file in d:
