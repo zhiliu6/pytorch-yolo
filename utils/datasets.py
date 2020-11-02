@@ -13,7 +13,6 @@ import torch
 from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
-from joblib import Parallel, delayed
 
 from utils.utils import xyxy2xywh, xywh2xyxy
 
@@ -533,10 +532,6 @@ def augment_hsv(img, hgain=0.5, sgain=0.5, vgain=0.5):
     #         img[:, :, i] = cv2.equalizeHist(img[:, :, i])
 
 
-def parallel_load_image(self, indices):
-    results = Parallel(n_jobs=4)(delayed(load_image)(self, index) for index in indices)
-    return results
-
 def load_mosaic(self, index):
     # loads images in a mosaic
 
@@ -544,14 +539,9 @@ def load_mosaic(self, index):
     s = self.img_size
     xc, yc = [int(random.uniform(s * 0.5, s * 1.5)) for _ in range(2)]  # mosaic center x, y
     indices = [index] + [random.randint(0, len(self.labels) - 1) for _ in range(3)]  # 3 additional image indices
-    
-    images = parallel_load_image(self, indices)
-    
-    #for i, index in enumerate(indices):
-    for i in range(4):
+    for i, index in enumerate(indices):
         # Load image
-        #img, _, (h, w) = load_image(self, index)
-        img, _, (h, w) = images[i]
+        img, _, (h, w) = load_image(self, index)
 
         # place img in img4
         if i == 0:  # top left
