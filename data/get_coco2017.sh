@@ -17,8 +17,8 @@ rm ${filename}
 
 # Download and unzip images
 cd coco/images
-f="train2017.zip" && curl http://images.cocodataset.org/zips/$f -o $f && unzip -q $f && rm $f
-f="val2017.zip" && curl http://images.cocodataset.org/zips/$f -o $f && unzip -q $f && rm $f
+f="train2017.zip" && curl http://images.cocodataset.org/zips/$f -o $f && (unzip $f | pv -l -s $(unzip -Z -1 $f | wc -l) > /dev/null) && rm $f
+f="val2017.zip" && curl http://images.cocodataset.org/zips/$f -o $f && (unzip $f | pv -l -s $(unzip -Z -1 $f | wc -l) > /dev/null) $f && rm $f
 
 # cd out
 cd ../..
