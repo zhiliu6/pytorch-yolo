@@ -398,7 +398,8 @@ if __name__ == '__main__':
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
     parser.add_argument('--logdir', type=str, default='runs/', help='logging directory')
     parser.add_argument('--extra_save_path', type=str, default='', help='extra checkpoint save path')
-    parser.add_argument('--mosaic', action='store_true', help='enable mosaic training')    opt = parser.parse_args()
+    parser.add_argument('--mosaic', action='store_true', help='enable mosaic training')
+    opt = parser.parse_args()
 
     # Resume
     if opt.resume:
