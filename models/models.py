@@ -1,6 +1,7 @@
 from utils.google_utils import *
 from utils.layers import *
 from utils.parse_config import *
+from utils import torch_utils
 
 ONNX_EXPORT = False
 
@@ -31,6 +32,38 @@ def create_modules(module_defs, img_size, cfg):
                                                        padding=k // 2 if mdef['pad'] else 0,
                                                        groups=mdef['groups'] if 'groups' in mdef else 1,
                                                        bias=not bn))
+            else:  # multiple-size conv
+                modules.add_module('MixConv2d', MixConv2d(in_ch=output_filters[-1],
+                                                          out_ch=filters,
+                                                          k=k,
+                                                          stride=stride,
+                                                          bias=not bn))
+
+            if bn:
+                modules.add_module('BatchNorm2d', nn.BatchNorm2d(filters, momentum=0.03, eps=1E-4))
+            else:
+                routs.append(i)  # detection output (goes into yolo layer)
+
+            if mdef['activation'] == 'leaky':  # activation study https://github.com/ultralytics/yolov3/issues/441
+                modules.add_module('activation', nn.LeakyReLU(0.1, inplace=True))
+            elif mdef['activation'] == 'swish':
+                modules.add_module('activation', Swish())
+            elif mdef['activation'] == 'mish':
+                modules.add_module('activation', Mish())
+
+        elif mdef['type'] == 'deformableconvolutional':
+            bn = mdef['batch_normalize']
+            filters = mdef['filters']
+            k = mdef['size']  # kernel size
+            stride = mdef['stride'] if 'stride' in mdef else (mdef['stride_y'], mdef['stride_x'])
+            if isinstance(k, int):  # single-size conv
+                modules.add_module('DeformConv2d', DeformConv2d(output_filters[-1],
+                                                       filters,
+                                                       kernel_size=k,
+                                                       padding=k // 2 if mdef['pad'] else 0,
+                                                       stride=stride,
+                                                       bias=not bn,
+                                                       modulation=True))
             else:  # multiple-size conv
                 modules.add_module('MixConv2d', MixConv2d(in_ch=output_filters[-1],
                                                           out_ch=filters,
@@ -81,6 +114,18 @@ def create_modules(module_defs, img_size, cfg):
             routs.extend([i + l if l < 0 else l for l in layers])
             modules = FeatureConcat(layers=layers)
 
+        elif mdef['type'] == 'route2':  # nn.Sequential() placeholder for 'route' layer
+            layers = mdef['layers']
+            filters = sum([output_filters[l + 1 if l > 0 else l] for l in layers])
+            routs.extend([i + l if l < 0 else l for l in layers])
+            modules = FeatureConcat2(layers=layers)
+
+        elif mdef['type'] == 'route3':  # nn.Sequential() placeholder for 'route' layer
+            layers = mdef['layers']
+            filters = sum([output_filters[l + 1 if l > 0 else l] for l in layers])
+            routs.extend([i + l if l < 0 else l for l in layers])
+            modules = FeatureConcat3(layers=layers)
+
         elif mdef['type'] == 'route_lhalf':  # nn.Sequential() placeholder for 'route' layer
             layers = mdef['layers']
             filters = sum([output_filters[l + 1 if l > 0 else l] for l in layers])//2
@@ -98,8 +143,8 @@ def create_modules(module_defs, img_size, cfg):
 
         elif mdef['type'] == 'yolo':
             yolo_index += 1
-            stride = [32, 16, 8, 4, 2]  # P5, P4, P3 strides
-            if any(x in cfg for x in ['yolov4-tiny']):  # stride order reversed
+            stride = [8, 16, 32, 64, 128]  # P3, P4, P5, P6, P7 strides
+            if any(x in cfg for x in ['yolov4-tiny', 'fpn', 'yolov3']):  # P5, P4, P3 strides
                 stride = [32, 16, 8]
             layers = mdef['from'] if 'from' in mdef else []
             modules = YOLOLayer(anchors=mdef['anchors'][mdef['mask']],  # anchor list
@@ -117,7 +162,8 @@ def create_modules(module_defs, img_size, cfg):
                     j -= 1
                 bias_ = module_list[j][0].bias  # shape(255,)
                 bias = bias_[:modules.no * modules.na].view(modules.na, -1)  # shape(3,85)
-                bias[:, 4] += -4.5  # obj
+                #bias[:, 4] += -4.5  # obj
+                bias[:, 4] += math.log(8 / (640 / stride[yolo_index]) ** 2)  # obj (8 objects per 640 image)
                 bias[:, 5:] += math.log(0.6 / (modules.nc - 0.99))  # cls (sigmoid(p) = 1/nc)
                 module_list[j][0].bias = torch.nn.Parameter(bias_, requires_grad=bias_.requires_grad)
             except:
@@ -220,13 +266,16 @@ class YOLOLayer(nn.Module):
             return p_cls, xy * ng, wh
 
         else:  # inference
-            io = p.clone()  # inference output
-            io[..., :2] = torch.sigmoid(io[..., :2]) + self.grid  # xy
-            io[..., 2:4] = torch.exp(io[..., 2:4]) * self.anchor_wh  # wh yolo method
+            io = p.sigmoid()
+            io[..., :2] = (io[..., :2] * 2. - 0.5 + self.grid)
+            io[..., 2:4] = (io[..., 2:4] * 2) ** 2 * self.anchor_wh
             io[..., :4] *= self.stride
-            torch.sigmoid_(io[..., 4:])
+            #io = p.clone()  # inference output
+            #io[..., :2] = torch.sigmoid(io[..., :2]) + self.grid  # xy
+            #io[..., 2:4] = torch.exp(io[..., 2:4]) * self.anchor_wh  # wh yolo method
+            #io[..., :4] *= self.stride
+            #torch.sigmoid_(io[..., 4:])
             return io.view(bs, -1, self.no), p  # view [1, 3, 13, 13, 85] as [1, 507, 85]
-
 
 class Darknet(nn.Module):
     # YOLOv3 object detection model
@@ -292,7 +341,7 @@ class Darknet(nn.Module):
 
         for i, module in enumerate(self.module_list):
             name = module.__class__.__name__
-            if name in ['WeightedFeatureFusion', 'FeatureConcat', 'FeatureConcat_l']:  # sum, concat
+            if name in ['WeightedFeatureFusion', 'FeatureConcat', 'FeatureConcat2', 'FeatureConcat3', 'FeatureConcat_l']:  # sum, concat
                 if verbose:
                     l = [i - 1] + module.layers  # layers
                     sh = [list(x.shape)] + [list(out[i].shape) for i in module.layers]  # shapes
@@ -437,34 +486,19 @@ def save_weights(self, path='model.weights', cutoff=-1):
                 conv_layer.weight.data.cpu().numpy().tofile(f)
 
 
-def convert(cfg='cfg/yolov4-pacsp.cfg', weights='weights/yolov4-pacsp.weights'):
+def convert(cfg='cfg/yolov3-spp.cfg', weights='weights/yolov3-spp.weights', saveto='converted.weights'):
     # Converts between PyTorch and Darknet format per extension (i.e. *.weights convert to *.pt and vice versa)
     # from models import *; convert('cfg/yolov3-spp.cfg', 'weights/yolov3-spp.weights')
 
     # Initialize model
     model = Darknet(cfg)
-
-    # Load weights and save
-    if weights.endswith('.pt'):  # if PyTorch format
-        model.load_state_dict(torch.load(weights, map_location='cpu')['model'])
-        save_weights(model, path='converted.weights', cutoff=-1)
-        print("Success: converted '%s' to 'converted.weights'" % weights)
-
-    elif weights.endswith('.weights'):  # darknet format
-        _ = load_darknet_weights(model, weights)
-
-        chkpt = {'epoch': -1,
-                 'best_fitness': None,
-                 'training_results': None,
-                 'model': model.state_dict(),
-                 'optimizer': None}
-
-        torch.save(chkpt, 'converted.pt')
-        print("Success: converted '%s' to 'converted.pt'" % weights)
-
-    else:
-        print('Error: extension not supported.')
-
+    ckpt = torch.load(weights)  # load checkpoint
+    try:
+        ckpt['model'] = {k: v for k, v in ckpt['model'].items() if model.state_dict()[k].numel() == v.numel()}
+        model.load_state_dict(ckpt['model'], strict=False)
+        save_weights(model, path=saveto, cutoff=-1)
+    except KeyError as e:
+        print(e)
 
 def attempt_download(weights):
     # Attempt to download pretrained weights if not found locally
