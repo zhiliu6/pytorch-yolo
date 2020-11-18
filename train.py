@@ -27,6 +27,11 @@ from utils.general import (
 from utils.google_utils import attempt_download
 from utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
 
+def save_to(chkpt, name):
+    extra_save_path = opt.extra_save_path
+    torch.save(chkpt, name)
+    if os.path.exists(extra_save_path):
+        torch.save(chkpt, extra_save_path + name)
 
 def train(hyp, opt, device, tb_writer=None):
     print(f'Hyperparameters {hyp}')
@@ -142,7 +147,7 @@ def train(hyp, opt, device, tb_writer=None):
         model = DDP(model, device_ids=[opt.local_rank], output_device=(opt.local_rank))
 
     # Trainloader
-    dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt, hyp=hyp, augment=True,
+    dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt, hyp=hyp, augment=opt.mosaic,
                                             cache=opt.cache_images, rect=opt.rect, local_rank=rank,
                                             world_size=opt.world_size)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
@@ -337,11 +342,11 @@ def train(hyp, opt, device, tb_writer=None):
                             'optimizer': None if final_epoch else optimizer.state_dict()}
 
                 # Save last, best and delete
-                torch.save(ckpt, last)
+                save_to(ckpt, last)
                 if epoch >= (epochs-5):
-                    torch.save(ckpt, last.replace('.pt','_{:03d}.pt'.format(epoch)))
+                    save_to(ckpt, last.replace('.pt','_{:03d}.pt'.format(epoch)))
                 if (best_fitness == fi) and not final_epoch:
-                    torch.save(ckpt, best)
+                    save_to(ckpt, best)
                 del ckpt
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training
@@ -392,7 +397,8 @@ if __name__ == '__main__':
     parser.add_argument('--sync-bn', action='store_true', help='use SyncBatchNorm, only available in DDP mode')
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
     parser.add_argument('--logdir', type=str, default='runs/', help='logging directory')
-    opt = parser.parse_args()
+    parser.add_argument('--extra_save_path', type=str, default='', help='extra checkpoint save path')
+    parser.add_argument('--mosaic', action='store_true', help='enable mosaic training')    opt = parser.parse_args()
 
     # Resume
     if opt.resume:
