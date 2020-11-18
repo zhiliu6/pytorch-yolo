@@ -440,7 +440,9 @@ if __name__ == '__main__':
         tb_writer = None
         if opt.global_rank in [-1, 0]:
             print('Start Tensorboard with "tensorboard --logdir %s", view at http://localhost:6006/' % opt.logdir)
-            tb_writer = SummaryWriter(log_dir=increment_dir(Path(opt.logdir) / 'exp', opt.name))  # runs/exp
+			log_dir_path = increment_dir(Path(opt.logdir) / 'exp', opt.name)  # runs/exp
+			os.mkdirs(log_dir_path, 0777)
+            tb_writer = SummaryWriter(log_dir=log_dir_path)
 
         train(hyp, opt, device, tb_writer)
 
