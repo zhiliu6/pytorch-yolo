@@ -27,11 +27,17 @@ from utils.general import (
 from utils.google_utils import attempt_download
 from utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
 
+def makedirs(path)
+    path, name = os.path.split(path)
+    if len(path) > 0:
+        os.makedirs(path)
+
 def save_to(chkpt, name):
-    extra_save_path = opt.extra_save_path
+    makedirs(name)
     torch.save(chkpt, name)
-    if os.path.exists(extra_save_path):
-        torch.save(chkpt, extra_save_path + name)
+    if os.path.exists(opt.extra_save_path):
+        makedirs(opt.extra_save_path + name)
+        torch.save(chkpt, opt.extra_save_path + name)
 
 def train(hyp, opt, device, tb_writer=None):
     print(f'Hyperparameters {hyp}')
