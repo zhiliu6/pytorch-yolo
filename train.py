@@ -27,9 +27,9 @@ from utils.general import (
 from utils.google_utils import attempt_download
 from utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
 
-def makedirs(path)
+def makedirs(path):
     path, name = os.path.split(path)
-    if len(path) > 0:
+    if len(path) > 0 and !os.path.exists(path):
         os.makedirs(path)
 
 def save_to(chkpt, name):
