@@ -202,6 +202,7 @@ def train(hyp, opt, device, tb_writer=None):
         print('Using %g dataloader workers' % dataloader.num_workers)
         print('Starting training for %g epochs...' % epochs)
     # torch.autograd.set_detect_anomaly(True)
+    it_miniters = 10
     it_count = 0
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
@@ -284,7 +285,7 @@ def train(hyp, opt, device, tb_writer=None):
 
             # Print
             it_count += 1
-            if (it_count % it_miniters) == 0 and rank in [-1, 0]:
+            if ((it_count % it_miniters) == 0) and (rank in [-1, 0]):
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                 mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
                 s = ('%10s' * 2 + '%10.4g' * 6) % (
